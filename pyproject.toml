@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "openai-assistant-manager"
+version = "0.1.0"
+description = "OpenAI Assistant Manager for generating tips"
+authors = ["Andy", "Maria"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+openai = "^1.58.1"
+typer = "^0.15.1"
+python-dotenv = "^1.0.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
