@@ -39,10 +39,14 @@ class AssistantManager:
         """Update assistant with new file IDs while preserving file_search tool"""
         self.client.beta.assistants.update(
             assistant_id=assistant_id,
-            tools=[Tool(type="file_search")],
-            tool_resources=ToolResources(
-                file_search=ToolResourcesFileSearch(vector_store_ids=file_ids)
-            )
+            tools=[{"type": "file_search", "file_search": {
+                "max_num_results": 1,
+            }}],
+            tool_resources={
+              "file_search": {
+                "vector_store_ids": file_ids
+              }
+            }
         )
 
     def upload_file(self, file_path: Path, assistant_id: str) -> str:
