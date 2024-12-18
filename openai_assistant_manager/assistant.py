@@ -1,7 +1,7 @@
 # openai_assistant_manager/assistant.py
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from openai import OpenAI
 from dotenv import load_dotenv
 from openai.types.beta import Assistant
@@ -41,7 +41,7 @@ class AssistantManager:
 
             return uploaded_file.id
 
-    def upload_folder(self, folder_path: Path, assistant_id: str, file_pattern: str = "*.docx") -> List[str]:
+    def upload_folder(self, folder_path: Path, assistant_id: str, file_pattern: str = "*.docx") -> List[tuple[str, str]]:
         """Upload all matching files from a folder and its subfolders"""
         uploaded_files = []
 
