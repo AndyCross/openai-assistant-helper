@@ -70,7 +70,7 @@ class AssistantManager:
         """Retrieve existing file IDs from an assistant"""
         assistant = self.client.beta.assistants.retrieve(assistant_id=assistant_id)
         try:
-            return assistant.tool_resources.get('file_search', {}).get('vector_store_ids', [])
+            return assistant.tool_resources.file_search.vector_store_ids
         except AttributeError:
             return []
 
