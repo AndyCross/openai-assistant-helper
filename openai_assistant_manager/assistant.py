@@ -60,7 +60,7 @@ class AssistantManager:
             tools=[{"type": "file_search", "file_search": {}}],
             tool_resources={
                 "file_search": {
-                    "vector_store_ids": [vector_store["id"]]
+                    "vector_store_ids": [vector_store.id]
                 }
             }
         )
