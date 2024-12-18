@@ -23,7 +23,14 @@ class AssistantManager:
             name=name,
             description=description,
             model=model,
-            instructions="You are a helpful assistant that generates daily tips based on provided knowledge and topics."
+            instructions="You are a helpful assistant that generates daily tips based on provided knowledge and topics.",
+            tools=[{"type": "file_search", "file_search": {
+            }}],
+            tool_resources={
+                "file_search": {
+                    "vector_store_ids": []
+                }
+            }
         )
         return assistant
 
@@ -40,7 +47,6 @@ class AssistantManager:
         self.client.beta.assistants.update(
             assistant_id=assistant_id,
             tools=[{"type": "file_search", "file_search": {
-                "max_num_results": 1,
             }}],
             tool_resources={
               "file_search": {
