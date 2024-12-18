@@ -26,6 +26,23 @@ def upload_file(
     typer.echo(f"Uploaded file: {file_id}")
 
 @app.command()
+def upload_folder(
+        folder_path: Path = typer.Argument(..., help="Path to folder to upload"),
+        assistant_id: str = typer.Option(..., help="Assistant ID to upload to"),
+        pattern: str = typer.Option("*.docx", help="File pattern to match (e.g., *.docx, *.pdf)")
+):
+    """Upload all matching files from a folder and its subfolders"""
+    uploaded_files = manager.upload_folder(folder_path, assistant_id, pattern)
+
+    if not uploaded_files:
+        typer.echo(f"No matching files found in {folder_path}")
+        return
+
+    typer.echo(f"Uploaded {len(uploaded_files)} files:")
+    for file_path, file_id in uploaded_files:
+        typer.echo(f"- {file_path}: {file_id}")
+
+@app.command()
 def generate_tip(
     topic: str = typer.Argument(..., help="Topic for the tip"),
     assistant_id: str = typer.Option(..., help="Assistant ID to use"),

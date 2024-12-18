@@ -41,6 +41,23 @@ class AssistantManager:
 
             return uploaded_file.id
 
+    def upload_folder(self, folder_path: Path, assistant_id: str, file_pattern: str = "*.docx") -> List[str]:
+        """Upload all matching files from a folder and its subfolders"""
+        uploaded_files = []
+
+        # Convert to Path object if string
+        folder_path = Path(folder_path)
+
+        # Recursively find all matching files
+        for file_path in folder_path.rglob(file_pattern):
+            try:
+                file_id = self.upload_file(file_path, assistant_id)
+                uploaded_files.append((str(file_path), file_id))
+            except Exception as e:
+                print(f"Error uploading {file_path}: {str(e)}")
+
+        return uploaded_files
+
     def generate_tip(self, topic: str, assistant_id: str, max_tokens: int = 150) -> str:
         """Generate a tip using the assistant"""
         thread = self.client.beta.threads.create()
