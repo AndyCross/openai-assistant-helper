@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Optional, List
 from openai import OpenAI
 from dotenv import load_dotenv
-from openai.types.beta import Assistant
-from openai.types.beta.thread_create_and_run_params import Tool, ToolResources
+from openai.types.beta import Assistant, FileSearchToolParam
+from openai.types.beta.thread_create_and_run_params import Tool, ToolResources, ToolResourcesFileSearch
 
 load_dotenv()
 
@@ -41,9 +41,7 @@ class AssistantManager:
             assistant_id=assistant_id,
             tools=[Tool(type="file_search")],
             tool_resources=ToolResources(
-                file_search={
-                    "vector_store_ids": file_ids
-                }
+                file_search=ToolResourcesFileSearch(vector_store_ids=file_ids)
             )
         )
 
