@@ -78,7 +78,7 @@ class AssistantManager:
         """Upload a file to an assistant's knowledge base"""
         # Get assistant to find its vector store
         assistant = self.client.beta.assistants.retrieve(assistant_id=assistant_id)
-        vector_store_ids = assistant.tool_resources.get('file_search', {}).get('vector_store_ids', [])
+        vector_store_ids = assistant.tool_resources.file_search.vector_store_ids
 
         if not vector_store_ids:
             raise ValueError("No vector store found for assistant")
