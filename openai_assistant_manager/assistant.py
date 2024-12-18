@@ -5,6 +5,7 @@ from typing import Optional, List
 from openai import OpenAI
 from dotenv import load_dotenv
 from openai.types.beta import Assistant
+from openai.types.beta.thread_create_and_run_params import Tool, ToolResources, ToolResourcesFileSearch
 
 load_dotenv()
 
@@ -26,35 +27,75 @@ class AssistantManager:
         )
         return assistant
 
+    def get_existing_file_ids(self, assistant_id: str) -> List[str]:
+        """Retrieve existing file IDs from an assistant"""
+        assistant = self.client.beta.assistants.retrieve(assistant_id=assistant_id)
+        try:
+            return assistant.tool_resources.get('file_search', {}).get('file_ids', [])
+        except AttributeError:
+            return []
+
+    def update_assistant_files(self, assistant_id: str, file_ids: List[str]) -> None:
+        """Update assistant with new file IDs while preserving file_search tool"""
+        self.client.beta.assistants.update(
+            assistant_id=assistant_id,
+            tools=[Tool(type="file_search")],
+            tool_resources=ToolResources(
+                file_search=ToolResourcesFileSearch(vector_store_ids=file_ids)
+            )
+        )
+
     def upload_file(self, file_path: Path, assistant_id: str) -> str:
-        """Upload a file to an assistant's knowledge base"""
+        """Upload a file to an assistant's knowledge base and add it to existing files"""
+        # First get existing file IDs
+        existing_file_ids = self.get_existing_file_ids(assistant_id)
+
+        # Upload new file
         with open(file_path, "rb") as file:
             uploaded_file = self.client.files.create(
                 file=file,
                 purpose="assistants"
             )
 
-            self.client.beta.assistants.files.create(
-                assistant_id=assistant_id,
-                file_id=uploaded_file.id
-            )
+        # Update assistant with combined file IDs
+        self.update_assistant_files(
+            assistant_id=assistant_id,
+            file_ids=[*existing_file_ids, uploaded_file.id]
+        )
 
-            return uploaded_file.id
+        return uploaded_file.id
 
-    def upload_folder(self, folder_path: Path, assistant_id: str, file_pattern: str = "*.docx") -> List[tuple[str, str]]:
+    def upload_folder(self, folder_path: Path, assistant_id: str, file_pattern: str = "*.docx") -> List[
+        tuple[str, str]]:
         """Upload all matching files from a folder and its subfolders"""
         uploaded_files = []
+        existing_file_ids = self.get_existing_file_ids(assistant_id)
+        new_file_ids = []
 
         # Convert to Path object if string
         folder_path = Path(folder_path)
 
-        # Recursively find all matching files
+        # Recursively find and upload all matching files
         for file_path in folder_path.rglob(file_pattern):
             try:
-                file_id = self.upload_file(file_path, assistant_id)
-                uploaded_files.append((str(file_path), file_id))
+                # Upload the file
+                with open(file_path, "rb") as file:
+                    uploaded_file = self.client.files.create(
+                        file=file,
+                        purpose="assistants"
+                    )
+
+                new_file_ids.append(uploaded_file.id)
+                uploaded_files.append((str(file_path), uploaded_file.id))
             except Exception as e:
                 print(f"Error uploading {file_path}: {str(e)}")
+
+        # Update assistant once with all new files
+        if new_file_ids:
+            self.update_assistant_files(
+                assistant_id=assistant_id,
+                file_ids=[*existing_file_ids, *new_file_ids]
+            )
 
         return uploaded_files
 
