@@ -1,6 +1,6 @@
 # OpenAI Assistant Manager
 
-A command-line tool for managing OpenAI assistants and generating tips using their knowledge base. This tool allows you to create assistants, upload files (individually or in bulk), and generate tips based on the assistant's knowledge.
+A command-line tool for managing OpenAI assistants and generating tips using their knowledge base. This tool allows you to create assistants, manage vector stores, upload files (individually or in bulk), and generate tips based on the assistant's knowledge.
 
 ## Installation
 
@@ -23,8 +23,22 @@ OPENAI_ORG_ID=your_organization_id_here
 
 ## Commands
 
+### Create a Vector Store
+Create a new vector store for file storage:
+```bash
+poetry run assistant-manager create-vector-store \
+    "My Vector Store" \
+    --description "Store for my assistant's files"
+```
+
+### Get Vector Store Info
+Retrieve information about an existing vector store:
+```bash
+poetry run assistant-manager get-vector-store "My Vector Store"
+```
+
 ### Create an Assistant
-Create a new OpenAI assistant with a specified name and description:
+Create a new OpenAI assistant with a specified name and description. This automatically creates a matching vector store if it doesn't exist:
 ```bash
 poetry run assistant-manager create-assistant \
     --name "Tip Generator" \
@@ -33,7 +47,7 @@ poetry run assistant-manager create-assistant \
 ```
 
 ### Upload a Single File
-Upload an individual file to an assistant's knowledge base:
+Upload an individual file to an assistant's knowledge base (automatically added to the assistant's vector store):
 ```bash
 poetry run assistant-manager upload-file \
     path/to/file.docx \
@@ -69,6 +83,24 @@ poetry run assistant-manager generate-tip \
 Add these to your `~/.zshrc` for easier usage:
 
 ```bash
+# Function to create a vector store
+create-vector-store() {
+    if [ -z "$1" ]; then
+        echo "Usage: create-vector-store <name> [description]"
+        return 1
+    fi
+    poetry run assistant-manager create-vector-store "$1" ${2:+--description "$2"}
+}
+
+# Function to get vector store info
+get-vector-store() {
+    if [ -z "$1" ]; then
+        echo "Usage: get-vector-store <name>"
+        return 1
+    fi
+    poetry run assistant-manager get-vector-store "$1"
+}
+
 # Function to set up a new assistant
 assistant-setup() {
     poetry run assistant-manager create-assistant \
@@ -124,9 +156,18 @@ poetry run black .
 
 ## Error Handling
 
-- The tool will report any errors during file uploads
+- The tool will report any errors during file uploads or vector store operations
 - For folder uploads, it will continue processing remaining files if one fails
-- Invalid assistant IDs or API keys will result in clear error messages
+- Invalid assistant IDs, vector store IDs, or API keys will result in clear error messages
+- Files are automatically added to the correct vector store associated with each assistant
+
+## Architecture
+
+The tool uses OpenAI's vector store system to manage file embeddings and search capabilities:
+- Each assistant is associated with a dedicated vector store
+- Files are uploaded to OpenAI and then added to the appropriate vector store
+- The assistant's file search tool is automatically configured to use the correct vector store
+- Vector stores can be managed independently if needed
 
 ## License
 

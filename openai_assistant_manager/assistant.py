@@ -1,34 +1,66 @@
 # openai_assistant_manager/assistant.py
 import os
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict
 from openai import OpenAI
 from dotenv import load_dotenv
-from openai.types.beta import Assistant, FileSearchToolParam
+from openai.types.beta import Assistant, VectorStore
 from openai.types.beta.thread_create_and_run_params import Tool, ToolResources, ToolResourcesFileSearch
+from openai.types.beta.vector_stores import VectorStoreFile
 
 load_dotenv()
 
 
 class AssistantManager:
     def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"),
-                             organization=os.getenv("OPENAI_ORG_ID"),
-                             project=os.getenv("OPENAI_PROJECT_ID")
+        self.client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            organization=os.getenv("OPENAI_ORG_ID")
+        )
+
+    def create_vector_store(self, name: str, description: str = "") -> VectorStore:
+        """Create a new vector store"""
+        return self.client.beta.vector_stores.create(
+            name=name
+        )
+
+    def get_vector_stores(self) -> List[VectorStore]:
+        """List all vector stores"""
+        return self.client.beta.vector_stores.list().data
+
+    def get_vector_store(self, name: str) -> Optional[VectorStore]:
+        """Retrieve a vector store by name"""
+        vector_stores = self.get_vector_stores()
+        return next((vs for vs in vector_stores if vs.name == name), None)
+
+    def get_or_create_vector_store(self, name: str, description: str = "") -> VectorStore:
+        """Get existing vector store or create new one"""
+        vector_store = self.get_vector_store(name)
+        if not vector_store:
+            vector_store = self.create_vector_store(name, description)
+        return vector_store
+
+    def add_file_to_vector_store(self, file_id: str, vector_store_id: str) -> VectorStoreFile:
+        """Add a file to a vector store"""
+        return self.client.beta.vector_stores.files.create(
+            vector_store_id=vector_store_id,
+            file_id=file_id
         )
 
     def create_assistant(self, name: str, description: str, model: str) -> Assistant:
         """Create a new OpenAI assistant"""
+        # Create vector store with same name as assistant
+        vector_store = self.get_or_create_vector_store(name, description)
+
         assistant = self.client.beta.assistants.create(
             name=name,
             description=description,
             model=model,
             instructions="You are a helpful assistant that generates daily tips based on provided knowledge and topics.",
-            tools=[{"type": "file_search", "file_search": {
-            }}],
+            tools=[{"type": "file_search", "file_search": {}}],
             tool_resources={
                 "file_search": {
-                    "vector_store_ids": []
+                    "vector_store_ids": [vector_store["id"]]
                 }
             }
         )
@@ -38,40 +70,28 @@ class AssistantManager:
         """Retrieve existing file IDs from an assistant"""
         assistant = self.client.beta.assistants.retrieve(assistant_id=assistant_id)
         try:
-            return assistant.tool_resources.get('file_search', {}).get('file_ids', [])
+            return assistant.tool_resources.get('file_search', {}).get('vector_store_ids', [])
         except AttributeError:
             return []
 
-    def update_assistant_files(self, assistant_id: str, file_ids: List[str]) -> None:
-        """Update assistant with new file IDs while preserving file_search tool"""
-        self.client.beta.assistants.update(
-            assistant_id=assistant_id,
-            tools=[{"type": "file_search", "file_search": {
-            }}],
-            tool_resources={
-              "file_search": {
-                "vector_store_ids": file_ids
-              }
-            }
-        )
-
     def upload_file(self, file_path: Path, assistant_id: str) -> str:
-        """Upload a file to an assistant's knowledge base and add it to existing files"""
-        # First get existing file IDs
-        existing_file_ids = self.get_existing_file_ids(assistant_id)
+        """Upload a file to an assistant's knowledge base"""
+        # Get assistant to find its vector store
+        assistant = self.client.beta.assistants.retrieve(assistant_id=assistant_id)
+        vector_store_ids = assistant.tool_resources.get('file_search', {}).get('vector_store_ids', [])
 
-        # Upload new file
+        if not vector_store_ids:
+            raise ValueError("No vector store found for assistant")
+
+        # Upload file
         with open(file_path, "rb") as file:
             uploaded_file = self.client.files.create(
                 file=file,
                 purpose="assistants"
             )
 
-        # Update assistant with combined file IDs
-        self.update_assistant_files(
-            assistant_id=assistant_id,
-            file_ids=[*existing_file_ids, uploaded_file.id]
-        )
+        # Add to vector store
+        self.add_file_to_vector_store(uploaded_file.id, vector_store_ids[0])
 
         return uploaded_file.id
 
@@ -79,8 +99,6 @@ class AssistantManager:
         tuple[str, str]]:
         """Upload all matching files from a folder and its subfolders"""
         uploaded_files = []
-        existing_file_ids = self.get_existing_file_ids(assistant_id)
-        new_file_ids = []
 
         # Convert to Path object if string
         folder_path = Path(folder_path)
@@ -88,24 +106,10 @@ class AssistantManager:
         # Recursively find and upload all matching files
         for file_path in folder_path.rglob(file_pattern):
             try:
-                # Upload the file
-                with open(file_path, "rb") as file:
-                    uploaded_file = self.client.files.create(
-                        file=file,
-                        purpose="assistants"
-                    )
-
-                new_file_ids.append(uploaded_file.id)
-                uploaded_files.append((str(file_path), uploaded_file.id))
+                file_id = self.upload_file(file_path, assistant_id)
+                uploaded_files.append((str(file_path), file_id))
             except Exception as e:
                 print(f"Error uploading {file_path}: {str(e)}")
-
-        # Update assistant once with all new files
-        if new_file_ids:
-            self.update_assistant_files(
-                assistant_id=assistant_id,
-                file_ids=[*existing_file_ids, *new_file_ids]
-            )
 
         return uploaded_files
 
@@ -124,7 +128,6 @@ class AssistantManager:
             assistant_id=assistant_id
         )
 
-        # Wait for completion
         while run.status in ["queued", "in_progress"]:
             run = self.client.beta.threads.runs.retrieve(
                 thread_id=thread.id,
